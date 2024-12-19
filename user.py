@@ -1,8 +1,42 @@
 import streamlit as st
+from streamlit.components.v1 import html
 from db import get_projects_for_user, get_project_by_id, get_sessions_for_project, get_session_by_id, update_session_summary
 from db import insert_message, get_messages_for_session, insert_file, get_files_for_project, delete_file
 from chat import ask_chatgpt
 from utils import save_uploaded_file
+
+def svg_button_input():
+    send_svg = """
+    <svg xmlns="http://www.w3.org/2000/svg" fill="#ffffff" height="24px" viewBox="0 0 24 24" width="24px">
+        <path d="M0 0h24v24H0z" fill="none"/>
+        <path d="M2 21l21-9L2 3v7l15 2-15 2z"/>
+    </svg>
+    """
+    custom_input = f"""
+    <div style="display: flex; align-items: center; gap: 5px; width: 100%; background-color: #1e1e1e; padding: 5px; border-radius: 5px;">
+        <input id="user_input" type="text" placeholder="Your question..." 
+               style="flex: 1; padding: 10px; font-size: 16px; border: 1px solid #333; border-radius: 5px; background-color: #2a2a2a; color: #ffffff;" />
+        <button id="send_button" style="padding: 10px; background-color: #444444; border: none; 
+                border-radius: 5px; cursor: pointer;">
+            {send_svg}
+        </button>
+    </div>
+    <script>
+        document.getElementById("send_button").onclick = function() {{
+            let userInput = document.getElementById("user_input").value;
+            if (userInput.trim() !== "") {{
+                const searchParams = new URLSearchParams(window.location.search);
+                searchParams.set('SEND_MESSAGE', encodeURIComponent(userInput));
+                // Перенаправляем на новый URL, тем самым вызывая перезагрузку с параметром
+                window.location.href = window.location.pathname + '?' + searchParams.toString();
+            }} else {{
+                alert("Please enter a message.");
+            }}
+        }};
+    </script>
+    """
+    html(custom_input, height=80)
+
 
 def user_projects_page(user):
     st.title("My projects")
@@ -10,27 +44,17 @@ def user_projects_page(user):
     projects = get_projects_for_user(user[0])
     for p in projects:
         project_id, name, goal, status = p
-        # st.write(f"**Project:** {name} ({status})")
-        # Кнопка для перехода к проекту
         if st.button(f"Open {name}"):
             st.session_state['project_id'] = project_id
             st.session_state['session_id'] = None
             st.rerun()
-        # Отобразить первые 10 сессий
         sessions = get_sessions_for_project(project_id)[:10]
         for s in sessions:
             s_id, s_num, s_status, s_summary = s
             st.write(f"- Session {s_num}: {s_status}")
 
-
 def project_page(user, project_id):
     project = get_project_by_id(project_id)
-
-    # if st.button("Back"):
-    #     st.session_state['project_id'] = None
-    #     st.session_state['session_id'] = None
-    #     st.rerun()
-
     if project:
         st.markdown("<p style='margin: 5px 0px;'>Project summary</p>", unsafe_allow_html=True)
         st.markdown("<p style='margin: 5px 0px;'>Line 3 setup</p>", unsafe_allow_html=True)
@@ -38,7 +62,6 @@ def project_page(user, project_id):
             f'<p style="color:gray; font-size:16px;">Line 3 is a bottle neck. Reducing its setup time will enable 180% production growth</p>',
             unsafe_allow_html=True,
         )
-        # st.write(f"Status: {project[4]}")
 
         sessions = [
             {"id": 1, "status": "completed"},
@@ -69,15 +92,6 @@ def project_page(user, project_id):
             unsafe_allow_html=True,
         )
 
-        # sessions = get_sessions_for_project(project_id)
-        # for s in sessions:
-        #     s_id, s_num, s_status, s_summary = s
-        #     st.write(f"Session {s_num}: {s_status}")
-        #     if st.button(f"Open session {s_num}"):
-        #         st.session_state['session_id'] = s_id
-        #         st.rerun()
-
-        # Загрузка файлов
         uploaded_file = st.file_uploader("Select a PDF file", type=["pdf"])
 
         if "file_uploaded" not in st.session_state:
@@ -90,7 +104,6 @@ def project_page(user, project_id):
             st.session_state["file_uploaded"] = True
             st.rerun()
 
-        # Список файлов проекта с кнопками удаления
         st.write("Uploaded files")
         files = get_files_for_project(project_id)
         for f_ in files:
@@ -100,7 +113,7 @@ def project_page(user, project_id):
                 st.write(fname)
             with col2:
                 if st.button("Delete", key=f"delete_{fid}"):
-                    delete_file(fid)  # Удаляем файл из базы данных
+                    delete_file(fid)
                     st.success(f"File {fname} has been deleted!")
                     st.rerun()
 
@@ -110,75 +123,47 @@ def project_page(user, project_id):
 
 def session_page(user, session_id):
     session = get_session_by_id(session_id)
-    # Кнопка "Назад" для возврата к странице проекта
     if st.button("Back"):
         st.session_state['session_id'] = None
         st.rerun()
 
     if session:
         st.title(f"Session {session[2]}")
-        st.write(f"Status {session[3]}")
-        st.write(f"Summary {session[4]}")  # Здесь отображается резюме
-
-        # Стилизация сообщений
-        st.markdown("""
-        <style>
-        .user-message, .assistant-message {
-            padding: 15px;
-            border-radius: 10px;
-            max-width: 100%;
-            word-wrap: break-word;
-            font-size: 16px;
-            line-height: 1.5;
-        }
-        .user-message {
-            background-color: #2a2a2a;
-            color: rgb(236, 236, 236);
-            text-align: right;
-        }
-        .assistant-message {
-            background-color: #3a3a3a;
-            color: rgb(236, 236, 236);
-            text-align: left;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        st.write(f"Status: {session[3]}")
+        st.write(f"Summary: {session[4]}")
 
         # Отображение сообщений
         msgs = get_messages_for_session(session_id)
         for sender, content, _ in msgs:
             if sender == "user":
-                st.markdown(f"""
-                <div class="user-message">
-                    {content}
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='background-color: #2a2a2a; color: #ececec; padding: 10px; margin: 10px 0px 0px 0px; border-radius: 5px; float: right'>{content}</div>",
+                    unsafe_allow_html=True
+                )
             else:
-                st.markdown(f"""
-                <div class="assistant-message">
-                    {content}
-                </div>
-                """, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Загрузка файлов и отправка сообщений
-        project_id = session[1]
-        pdf_files = get_files_for_project(project_id)
-        pdf_paths = [file[1] for file in pdf_files]  # Индекс 1 соответствует `file_path`
+                st.markdown(
+                    f"<div style='color: #ececec; margin: 0px 0px 20px 0px; border-radius: 5px;'>{content}</div>",
+                    unsafe_allow_html=True
+                )
 
         st.markdown("---")
+
+        # Размещаем поле ввода и кнопку рядом
         col1, col2 = st.columns([4, 1])
         with col1:
-            user_msg = st.text_input("Your question:", key="user_input")
+            user_msg = st.text_input("Your question...", key="user_message_input")
         with col2:
             if st.button("Send"):
-                if user_msg.strip() != "":
+                if user_msg.strip():
+                    # Обработка сообщения
                     all_msgs = get_messages_for_session(session_id)
                     messages_format = [
                         {"role": "user" if m[0] == "user" else "assistant", "content": m[1]}
                         for m in all_msgs
                     ]
                     messages_format.append({"role": "user", "content": user_msg})
+                    pdf_files = get_files_for_project(session[1])
+                    pdf_paths = [file[1] for file in pdf_files]
                     reply = ask_chatgpt(messages_format, pdf_paths=pdf_paths)
                     insert_message(session_id, "user", user_msg)
                     insert_message(session_id, "assistant", reply)
@@ -186,23 +171,18 @@ def session_page(user, session_id):
                 else:
                     st.error("Please enter a message.")
 
-        # Кнопка "Резюмировать"
         if st.button("Summarize"):
             all_msgs = get_messages_for_session(session_id)
             chat_text = "\n".join([f"{m[0]}: {m[1]}" for m in all_msgs])
-            summary_prompt = f"Please summarize the following conversation:\n\n{chat_text}"
+            summary_prompt = f"Summarize the conversation, don't use a lot of text, try to summarize as briefly as possible:\n\n{chat_text}"
+            pdf_files = get_files_for_project(session[1])
+            pdf_paths = [file[1] for file in pdf_files]
             summary = ask_chatgpt([{"role": "user", "content": summary_prompt}], pdf_paths=pdf_paths)
-
-            # Обновление резюме в базе данных
-            update_session_summary(session_id, summary)  # Обновление резюме в БД
-
-            st.success("The resume has been successfully updated!")
+            update_session_summary(session_id, summary)
+            st.success("The summary has been updated!")
             st.rerun()
 
     else:
         st.error("Session not found.")
-
-
-
 
 

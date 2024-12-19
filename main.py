@@ -28,24 +28,6 @@ def login_page():
 def main():
     """Main application function."""
     st.set_page_config(page_title="OPEX MVP", layout="wide")
-    st.markdown("""
-        <style>
-            /* Убираем стандартную стрелку */
-            [data-testid="collapsedControl"]::before {
-                content: '';
-            }
-
-            /* Добавляем вашу кастомную стрелку с помощью SVG */
-            [data-testid="collapsedControl"] {
-                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512'%3E%3Cpath fill='white' d='M207.029 381.476L8.485 203.314c-11.627-10.67-11.627-28.958 0-39.629l198.544-178.162c11.828-10.619 30.296-3.068 30.296 13.573v356.325c0 16.64-18.468 24.19-30.296 13.573z'/%3E%3C/svg%3E");
-                background-size: contain;
-                background-repeat: no-repeat;
-                background-position: center;
-                width: 24px; /* Размер стрелки */
-                height: 24px;
-            }
-        </style>
-    """, unsafe_allow_html=True)
 
     init_db()
 
