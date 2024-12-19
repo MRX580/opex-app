@@ -236,3 +236,17 @@ def delete_file(file_id):
         conn.commit()
 
     conn.close()
+
+
+def update_session_summary(session_id, summary):
+    """
+    Обновляет резюме (summary) для заданной сессии.
+
+    :param session_id: ID сессии, которую нужно обновить.
+    :param summary: Текст резюме для записи в базу данных.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE sessions SET summary=? WHERE id=?", (summary, session_id))
+    conn.commit()
+    conn.close()

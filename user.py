@@ -1,5 +1,5 @@
 import streamlit as st
-from db import get_projects_for_user, get_project_by_id, get_sessions_for_project, get_session_by_id
+from db import get_projects_for_user, get_project_by_id, get_sessions_for_project, get_session_by_id, update_session_summary
 from db import insert_message, get_messages_for_session, insert_file, get_files_for_project, delete_file
 from chat import ask_chatgpt
 from utils import save_uploaded_file
@@ -108,51 +108,101 @@ def project_page(user, project_id):
         st.error("Project not found")
 
 
-
 def session_page(user, session_id):
     session = get_session_by_id(session_id)
     # Кнопка "Назад" для возврата к странице проекта
     if st.button("Back"):
         st.session_state['session_id'] = None
         st.rerun()
+
     if session:
         st.title(f"Session {session[2]}")
         st.write(f"Status {session[3]}")
-        st.write(f"Summary {session[4]}")
+        st.write(f"Summary {session[4]}")  # Здесь отображается резюме
 
-        # Отобразить историю сообщений
+        # Стилизация сообщений
+        st.markdown("""
+        <style>
+        .user-message, .assistant-message {
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 100%;
+            word-wrap: break-word;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .user-message {
+            background-color: #2a2a2a;
+            color: rgb(236, 236, 236);
+            text-align: right;
+        }
+        .assistant-message {
+            background-color: #3a3a3a;
+            color: rgb(236, 236, 236);
+            text-align: left;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # Отображение сообщений
         msgs = get_messages_for_session(session_id)
-        for m in msgs:
-            sender, content, timestamp = m
-            st.write(f"**{sender}** [{timestamp}]: {content}")
+        for sender, content, _ in msgs:
+            if sender == "user":
+                st.markdown(f"""
+                <div class="user-message">
+                    {content}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="assistant-message">
+                    {content}
+                </div>
+                """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # Получить пути к загруженным PDF для проекта
+        # Загрузка файлов и отправка сообщений
         project_id = session[1]
         pdf_files = get_files_for_project(project_id)
         pdf_paths = [file[1] for file in pdf_files]  # Индекс 1 соответствует `file_path`
 
-        # Отправить сообщение ChatGPT
-        user_msg = st.text_input("Your question for ChatGPT:")
-        if st.button("Send"):
-            if user_msg.strip() != "":
-                # Собираем контекст
-                all_msgs = get_messages_for_session(session_id)
-                messages_format = []
-                for mm in all_msgs:
-                    sender, content, _ = mm
-                    role = "user" if sender == "user" else "assistant"
-                    messages_format.append({"role": role, "content": content})
+        st.markdown("---")
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            user_msg = st.text_input("Your question:", key="user_input")
+        with col2:
+            if st.button("Send"):
+                if user_msg.strip() != "":
+                    all_msgs = get_messages_for_session(session_id)
+                    messages_format = [
+                        {"role": "user" if m[0] == "user" else "assistant", "content": m[1]}
+                        for m in all_msgs
+                    ]
+                    messages_format.append({"role": "user", "content": user_msg})
+                    reply = ask_chatgpt(messages_format, pdf_paths=pdf_paths)
+                    insert_message(session_id, "user", user_msg)
+                    insert_message(session_id, "assistant", reply)
+                    st.rerun()
+                else:
+                    st.error("Please enter a message.")
 
-                messages_format.append({"role": "user", "content": user_msg})
+        # Кнопка "Резюмировать"
+        if st.button("Summarize"):
+            all_msgs = get_messages_for_session(session_id)
+            chat_text = "\n".join([f"{m[0]}: {m[1]}" for m in all_msgs])
+            summary_prompt = f"Please summarize the following conversation:\n\n{chat_text}"
+            summary = ask_chatgpt([{"role": "user", "content": summary_prompt}], pdf_paths=pdf_paths)
 
-                # Включаем PDF в контекст
-                reply = ask_chatgpt(messages_format, pdf_paths=pdf_paths)
-                insert_message(session_id, "user", user_msg)
-                insert_message(session_id, "assistant", reply)
-                st.rerun()
-            else:
-                st.error("Please enter a message.")
+            # Обновление резюме в базе данных
+            update_session_summary(session_id, summary)  # Обновление резюме в БД
+
+            st.success("The resume has been successfully updated!")
+            st.rerun()
+
     else:
-        st.error("Session not found")
+        st.error("Session not found.")
+
+
+
 
 
