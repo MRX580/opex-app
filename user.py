@@ -94,15 +94,16 @@ def project_page(user, project_id):
 
         uploaded_file = st.file_uploader("Select a PDF file", type=["pdf"])
 
-        if "file_uploaded" not in st.session_state:
-            st.session_state["file_uploaded"] = False
+        if uploaded_file is not None:
+            # Проверяем, был ли файл уже загружен
+            existing_files = get_files_for_project(project_id)
+            existing_file_names = {f[2] for f in existing_files}
 
-        if uploaded_file is not None and not st.session_state["file_uploaded"]:
-            file_path = save_uploaded_file(uploaded_file)
-            insert_file(project_id, file_path, uploaded_file.name)
-            st.success("The file has been uploaded!")
-            st.session_state["file_uploaded"] = True
-            st.rerun()
+            if uploaded_file.name not in existing_file_names:
+                file_path = save_uploaded_file(uploaded_file)
+                insert_file(project_id, file_path, uploaded_file.name)
+                st.success("The file has been uploaded!")
+                st.rerun()
 
         st.write("Uploaded files")
         files = get_files_for_project(project_id)
@@ -119,6 +120,7 @@ def project_page(user, project_id):
 
     else:
         st.error("Project not found")
+
 
 
 def session_page(user, session_id):
