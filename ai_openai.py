@@ -2,6 +2,7 @@ import openai
 import os
 from utils import extract_text_from_pdf
 from dotenv import find_dotenv, load_dotenv
+from io import BytesIO
 
 load_dotenv(find_dotenv())
 
@@ -58,3 +59,17 @@ def ask_chatgpt(messages, pdf_paths=None, max_tokens=1500, temperature=0.7):
     )
     return response.choices[0].message['content']
 
+
+def transcribe_audio(audio_bytes: bytes) -> str:
+    """
+    Отправляет аудиоданные на Whisper API и возвращает расшифрованный текст.
+    """
+    audio_stream = BytesIO(audio_bytes)  # Преобразуем аудиобайты в поток
+    audio_stream.name = "audio.wav"  # Whisper требует указания имени файла
+    transcript = openai.Audio.transcribe(
+        model="whisper-1",
+        file=audio_stream,
+        # prompt="Введите описание, если нужно",
+        # language="ru"
+    )
+    return transcript["text"]
