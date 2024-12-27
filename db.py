@@ -173,12 +173,21 @@ def get_messages_for_session(session_id):
     return msgs
 
 
-def insert_file(project_id, file_path, file_name):
+def insert_file(session_id: int, file_path: str, file_name: str):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("INSERT INTO files (project_id, file_path, file_name) VALUES (?,?,?)", (project_id, file_path, file_name))
+    c.execute("INSERT INTO files (session_id, file_path, file_name) VALUES (?,?,?)",
+              (session_id, file_path, file_name))
     conn.commit()
     conn.close()
+
+def get_files_for_session(session_id: int):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, file_path, file_name FROM files WHERE session_id=?", (session_id,))
+    files = c.fetchall()
+    conn.close()
+    return files
 
 
 def get_files_for_project(project_id):
