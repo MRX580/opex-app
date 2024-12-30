@@ -38,8 +38,8 @@ def main():
     sessions = get_sessions_for_project(project_id)
     st.sidebar.write("Sessions")
     for s in sessions:
-        s_id, s_num, s_status, s_summary = s
-        if st.sidebar.button(f"Session {s_num}"):
+        s_id, s_num, s_status, s_summary, s_name = s
+        if st.sidebar.button(f"Session {s_name if str(s_name) != 'None' else s_num}"):
             st.session_state['session_id'] = s_id
             st.rerun()
 

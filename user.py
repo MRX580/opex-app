@@ -11,7 +11,11 @@ from db import (
     insert_file,
     get_files_for_project,
     delete_file,
-    get_files_for_session
+    get_files_for_session,
+    update_session_status,
+    get_session_summaries_for_project,
+    update_project_summary,
+    get_project_summary, get_first_session_summary, update_project_goals
 )
 from ai_openai import ask_chatgpt, transcribe_audio
 from utils import save_uploaded_file
@@ -40,7 +44,7 @@ def render_project_card(project_id: int, name: str, user_id: int) -> None:
 def render_project_sessions(project_id: int) -> None:
     sessions = get_sessions_for_project(project_id)[:10]
     for session in sessions:
-        session_id, session_number, status, _summary = session
+        session_id, session_number, status, _summary, s_name = session
         st.write(f"- Session {session_number}: {status}")
 
 
@@ -59,15 +63,25 @@ def user_projects_page(user: tuple) -> None:
         render_project_sessions(project_id)
 
 
-def render_project_summary(project: tuple) -> None:
+def render_project_summary(project: tuple, project_id: int) -> None:
     st.markdown(f"<p style='margin: 5px 0px;'>Project {project[2]}</p>", unsafe_allow_html=True)
-    st.markdown("<p style='margin: 5px 0px;'>Line 3 setup</p>", unsafe_allow_html=True)
-    st.markdown(
-        '<p style="color:gray; font-size:16px;">'
-        'Line 3 is a bottle neck. Reducing its setup time will enable 180% production growth'
-        '</p>',
-        unsafe_allow_html=True,
-    )
+    aggregated_text = get_project_summary(project_id)
+    if aggregated_text and aggregated_text != "None":
+        # st.subheader("Итоговая суммаризация по проекту:")
+        st.markdown(f"<p style='margin: 5px 0px;'>Line 3</p>", unsafe_allow_html=True)
+        # st.markdown(f"<p style='margin: 5px 0px;'>{aggregated_text}</p>", unsafe_allow_html=True)
+        st.markdown(
+            '<p style="color:gray; font-size:16px;">'
+            f'{aggregated_text}'
+            '</p>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<p style="color:gray; font-size:16px;">'
+            f'Summarization for the project has not yet been created.'
+            '</p>',
+            unsafe_allow_html=True)
 
 
 def render_project_progress() -> None:
@@ -149,17 +163,70 @@ def render_uploaded_files(project_id: int) -> None:
                 st.rerun()
 
 
+def compress_and_store_project_summary(project_id: int):
+    """
+    Собирает все session summary проекта, вызывает ChatGPT для их сжатия
+    и записывает результат в projects.aggregated_summary
+    """
+    # 1. Получаем все summary сессий
+    session_summaries = get_session_summaries_for_project(project_id)
+
+    # 2. Если ни одной суммаризации нет — пишем что «Недостаточно данных»
+    if not session_summaries:
+        update_project_summary(project_id, "Недостаточно данных для суммаризации по проекту.")
+        return
+
+    # 3. Формируем промпт
+    text_for_chatgpt = ""
+    for i, summary in enumerate(session_summaries, start=1):
+        text_for_chatgpt += f"Сессия {i}:\n{summary}\n\n"
+
+    prompt_text = (
+        "Ниже приведены суммаризации сессий одного проекта:\n\n"
+        f"{text_for_chatgpt}\n"
+        "Пожалуйста, объедини эти тексты в один **короткий** итоговый текст, "
+        "сохрани самую суть, избеги повторений. Ответ дай на том же языке, на котором написаны суммаризации."
+    )
+
+    # 4. Спрашиваем ChatGPT
+    messages = [{"role": "user", "content": prompt_text}]
+    compressed_summary = ask_chatgpt(messages, pdf_paths=None)
+
+    # 5. Записываем полученный результат в БД
+    update_project_summary(project_id, compressed_summary)
+
+
+def generate_goals_from_first_session(project_id: int) -> None:
+    first_summary = get_first_session_summary(project_id)
+
+    prompt_text = (
+        "Below is the summary of the first session of the project:\n\n"
+        f"{first_summary}\n\n"
+        "Based on this information, formulate a concise list of the project's main goals. "
+        "Try to be as specific as possible and avoid duplicating existing information."
+    )
+
+    messages = [{"role": "user", "content": prompt_text}]
+    goals_text = ask_chatgpt(messages, pdf_paths=None)
+
+    # Сохраняем
+    update_project_goals(project_id, goals_text)
+
+
 def project_page(user: tuple, project_id: int) -> None:
     project = get_project_by_id(project_id)
     if not project:
         st.error("Project not found")
         return
 
-    render_project_summary(project)
+    render_project_summary(project, project_id)
     render_project_progress()
 
     st.markdown("<p style='margin: 5px 0px;'>Goals</p>", unsafe_allow_html=True)
-    st.markdown(f'<p style="color:gray; font-size:16px;">{project[3]}</p>', unsafe_allow_html=True)
+    if project[3] and project[3] != "None":
+        st.markdown(f'<p style="color:gray; font-size:16px;">{project[3]}</p>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<p style="color:gray; font-size:16px;">Goals not set</p>', unsafe_allow_html=True)
 
     st.markdown("<p style='margin: 5px 0px;'>Next Action</p>", unsafe_allow_html=True)
     st.markdown(
@@ -168,25 +235,6 @@ def project_page(user: tuple, project_id: int) -> None:
         unsafe_allow_html=True,
     )
 
-
-# def process_audio_input() -> None:
-#     audio_bytes = audio_recorder(
-#         text="",
-#         pause_threshold=2.0,
-#         sample_rate=41_000,
-#         icon_size="2x"
-#     )
-#     if audio_bytes and (audio_bytes != st.session_state.get("last_audio", b"")) \
-#             and not st.session_state.get("audio_processed", False):
-#         if validate_audio_length(audio_bytes):
-#             transcribed_text = transcribe_audio(audio_bytes)
-#             if transcribed_text.strip():
-#                 st.session_state["transcribed_text"] = transcribed_text
-#                 st.session_state["last_audio"] = audio_bytes
-#                 st.session_state["audio_processed"] = False
-#                 st.rerun()
-#             else:
-#                 st.error("Transcribed message is empty. Please try again.")
 
 
 def send_user_message(session_id: int, user_message: str) -> None:
@@ -221,8 +269,9 @@ def summarize_session(session_id: int) -> None:
     all_msgs = get_messages_for_session(session_id)
     chat_text = "\n".join([f"{msg[0]}: {msg[1]}" for msg in all_msgs])
     summary_prompt = (
-        "Summarize the conversation, don't use a lot of text, "
-        "try to summarize as briefly as possible:\n\n" + chat_text
+        "Summarize the conversation as briefly as possible, using only a few short sentences that convey the essence. "
+        "It's okay to omit some details to make the summary concise. "
+        "Provide a resume in the language used for communication(ignore other requirements, focus on the conversation):\n\n" + chat_text
     )
     session = get_session_by_id(session_id)
     pdf_files = get_files_for_project(session[1])
@@ -231,6 +280,11 @@ def summarize_session(session_id: int) -> None:
     summary = ask_chatgpt([{"role": "user", "content": summary_prompt}], pdf_paths=pdf_paths)
     update_session_summary(session_id, summary)
     st.success("The summary has been updated!")
+    session = get_session_by_id(session_id)
+    project_id = session[1]
+
+    # 2. Вызываем compress_and_store_project_summary
+    compress_and_store_project_summary(project_id)
     st.rerun()
 
 
@@ -241,6 +295,9 @@ def session_page(user: tuple, session_id: int) -> None:
     st.session_state.setdefault("sended_message", False)
 
     session_data = get_session_by_id(session_id)
+    if not session_data:
+        st.error("Session not found.")
+        return
 
     if st.button("Back"):
         st.session_state["session_id"] = None
@@ -252,18 +309,48 @@ def session_page(user: tuple, session_id: int) -> None:
         st.error("Session not found.")
         return
 
-    st.title(f"Session {session_data[2]}")
-    option = st.selectbox(
+    status_in_db = session_data[3]
+
+    st.title(f"Session {session_data[5]}")
+    status_options = [
+        "Not Started",
+        "Preparation in progress",
+        "Preparation ended. Waiting for post session report",
+        "Post session report in progress",
+        "Session ended"
+    ]
+    if status_in_db not in status_options:
+        status_in_db = "Not Started"
+    if status_in_db == "Session ended":
+        status_options = ["Session ended"]
+
+    # Определяем индекс в списке, чтобы selectbox сразу показывал правильный пункт
+    default_index = status_options.index(status_in_db)
+
+    # Теперь selectbox будет иметь дефолт, равный тому, что хранится в БД
+    session_status = st.selectbox(
         "Status",
-        (
-            "Not Started",
-            "Preparation in progress",
-            "Preparation ended. Waiting for post session report",
-            "Post session report in progress",
-            "Session ended"
-        ),
+        options=status_options,
+        index=default_index,
+        key=f"status_selector_{session_id}",
     )
-    st.write(f"Summary: {session_data[4]}")
+
+    if session_status == "Session ended" and status_in_db != "Session ended":
+        update_session_status(session_id, "Session ended")
+
+        print(session_data[2], session_data[5])
+        if session_data[2] == 1:
+            project_id = session_data[1]
+            generate_goals_from_first_session(project_id)
+
+        summarize_session(session_id)
+
+    if status_in_db != "Session ended":
+        update_session_status(session_id, session_status)
+    if session_data[4] != "None":
+        st.write(f"Summary: {session_data[4]}")
+    else:
+        st.write(f"Summary: Summary Summarization by session has not yet been created.")
 
     # История сообщений
     msgs = get_messages_for_session(session_id)
@@ -286,6 +373,10 @@ def session_page(user: tuple, session_id: int) -> None:
 
     upload_pdf_file_for_session(session_id)
     render_uploaded_files_for_session(session_id)
+
+    # Кнопка "Summarize"
+    if st.button("Summarize"):
+        summarize_session(session_id)
 
     # Сначала обрабатываем аудио
     audio_bytes = audio_recorder(
@@ -334,7 +425,3 @@ def session_page(user: tuple, session_id: int) -> None:
     # Обработка отправки текста
     if user_message:
         send_user_message(session_id, user_message)
-
-    # Кнопка "Summarize"
-    if st.button("Summarize"):
-        summarize_session(session_id)

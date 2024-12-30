@@ -27,6 +27,7 @@ def init_db():
         name TEXT,
         goal TEXT,
         status TEXT,
+        aggregated_summary TEXT,
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
@@ -37,6 +38,7 @@ def init_db():
         session_number INTEGER,
         status TEXT,
         summary TEXT,
+        session_name TEXT,
         FOREIGN KEY(project_id) REFERENCES projects(id)
     )''')
 
@@ -114,8 +116,9 @@ def create_project(user_id, name, goal):
     project_id = c.lastrowid
     # Создаем 10 сессий
     for i in range(1, 11):
-        c.execute("INSERT INTO sessions (project_id, session_number, status) VALUES (?,?,?)",
-                  (project_id, i, 'Not Started'))
+        session_name = f"Session {i}"
+        c.execute("INSERT INTO sessions (project_id, session_number, status, session_name) VALUES (?,?,?,?)",
+                  (project_id, i, 'Not Started', session_name))
     conn.commit()
     conn.close()
 
@@ -132,7 +135,7 @@ def get_project_by_id(project_id):
 def get_sessions_for_project(project_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT id, session_number, status, summary FROM sessions WHERE project_id=?", (project_id,))
+    c.execute("SELECT id, session_number, status, summary, session_name FROM sessions WHERE project_id=?", (project_id,))
     sessions = c.fetchall()
     conn.close()
     return sessions
@@ -141,7 +144,7 @@ def get_sessions_for_project(project_id):
 def get_session_by_id(session_id):
     conn = get_connection()
     c = conn.cursor()
-    c.execute("SELECT id, project_id, session_number, status, summary FROM sessions WHERE id=?", (session_id,))
+    c.execute("SELECT id, project_id, session_number, status, summary, session_name FROM sessions WHERE id=?", (session_id,))
     session = c.fetchone()
     conn.close()
     return session
@@ -154,6 +157,21 @@ def update_session_summary(session_id, summary):
     conn.commit()
     conn.close()
 
+
+def update_session_name(session_id, session_name):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE sessions SET session_name=? WHERE id=?", (session_name, session_id))
+    conn.commit()
+    conn.close()
+
+
+def update_session_status(session_id, session_status):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE sessions SET status=? WHERE id=?", (session_status, session_id))
+    conn.commit()
+    conn.close()
 
 def insert_message(session_id, sender, content):
     conn = get_connection()
@@ -257,5 +275,101 @@ def update_session_summary(session_id, summary):
     conn = get_connection()
     c = conn.cursor()
     c.execute("UPDATE sessions SET summary=? WHERE id=?", (summary, session_id))
+    conn.commit()
+    conn.close()
+
+
+def get_session_summaries_for_project(project_id: int):
+    """
+    Возвращает список (непустых) summary всех сессий проекта.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT summary FROM sessions WHERE project_id=?", (project_id,))
+    rows = c.fetchall()
+    conn.close()
+    summaries = [row[0] for row in rows if row[0] and row[0].strip()]
+    return summaries
+
+def update_project_summary(project_id: int, summary: str):
+    """
+    Обновляет (записывает) в таблицу projects поле aggregated_summary.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE projects SET aggregated_summary=? WHERE id=?", (summary, project_id))
+    conn.commit()
+    conn.close()
+
+
+def get_project_summary(project_id: int) -> str:
+    """
+    Возвращает текущее значение поля aggregated_summary для проекта.
+    Если нет, вернёт None.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT aggregated_summary FROM projects WHERE id=?", (project_id,))
+    result = c.fetchone()
+    conn.close()
+    if result:
+        return result[0]
+    return None
+
+
+def get_first_session_summary(project_id: int) -> str:
+    """
+    Возвращает summary из первой сессии проекта (где session_number=1).
+    Если нет такой сессии или там нет summary, вернёт None.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    # Ищем ту сессию, у которой project_id=? И session_number=1
+    c.execute("SELECT summary FROM sessions WHERE project_id=? AND session_number=1", (project_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if row and row[0] and row[0].strip():
+        return row[0]
+    else:
+        return None
+
+
+def update_project_goals(project_id: int, new_goals: str) -> None:
+    """
+    Записывает в таблицу `projects` значение поля `goal`.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE projects SET goal=? WHERE id=?", (new_goals, project_id))
+    conn.commit()
+    conn.close()
+
+
+def get_first_session_summary(project_id: int) -> str:
+    """
+    Возвращает summary из первой сессии проекта (где session_number=1).
+    Если нет такой сессии или там нет summary, вернёт None.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    # Ищем ту сессию, у которой project_id=? И session_number=1
+    c.execute("SELECT summary FROM sessions WHERE project_id=? AND session_number=1", (project_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if row and row[0] and row[0].strip():
+        return row[0]
+    else:
+        return None
+
+
+def update_project_goals(project_id: int, new_goals: str) -> None:
+    """
+    Записывает в таблицу `projects` значение поля `goal`.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("UPDATE projects SET goal=? WHERE id=?", (new_goals, project_id))
     conn.commit()
     conn.close()
