@@ -173,7 +173,7 @@ def compress_and_store_project_summary(project_id: int):
 
     # 2. Если ни одной суммаризации нет — пишем что «Недостаточно данных»
     if not session_summaries:
-        update_project_summary(project_id, "Недостаточно данных для суммаризации по проекту.")
+        update_project_summary(project_id, "Insufficient data for project summarization.")
         return
 
     # 3. Формируем промпт
@@ -182,10 +182,10 @@ def compress_and_store_project_summary(project_id: int):
         text_for_chatgpt += f"Сессия {i}:\n{summary}\n\n"
 
     prompt_text = (
-        "Ниже приведены суммаризации сессий одного проекта:\n\n"
+        "Below are the summaries of the sessions for one project:\n\n"
         f"{text_for_chatgpt}\n"
-        "Пожалуйста, объедини эти тексты в один **короткий** итоговый текст, "
-        "сохрани самую суть, избеги повторений. Ответ дай на том же языке, на котором написаны суммаризации."
+        "Please merge these texts into one short final summary, "
+        "keeping only the essence and avoiding repetitions. Provide the answer in the same language as the summaries."
     )
 
     # 4. Спрашиваем ChatGPT
