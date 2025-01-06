@@ -373,3 +373,11 @@ def update_project_goals(project_id: int, new_goals: str) -> None:
     c.execute("UPDATE projects SET goal=? WHERE id=?", (new_goals, project_id))
     conn.commit()
     conn.close()
+
+def get_all_users():
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, name, email, password_hash, role, organization FROM users")
+    users = c.fetchall()
+    conn.close()
+    return users

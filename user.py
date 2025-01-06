@@ -236,7 +236,6 @@ def project_page(user: tuple, project_id: int) -> None:
     )
 
 
-
 def send_user_message(session_id: int, user_message: str) -> None:
     if not user_message.strip():
         st.error("Please enter a message.")
@@ -377,13 +376,40 @@ def session_page(user: tuple, session_id: int) -> None:
     # Кнопка "Summarize"
     if st.button("Summarize"):
         summarize_session(session_id)
+    # st.markdown(
+    #     """
+    #
+    #     <style>
+    #         .st-key-fixed-mic {
+    #             background: transparent; /* Прозрачный фон */
+    #             position: fixed;
+    #             bottom: 30px;
+    #             right: 10px;
+    #             width: 60px;
+    #             color: white;
+    #             border-radius: 50%;
+    #             display: flex;
+    #             justify-content: center;
+    #             align-items: center;
+    #             cursor: pointer;
+    #             z-index: 9999;
+    #         }
+    #         html {
+    #             color: white;
+    #         {
+    #
+    #     </style>
+    #     """,
+    #     unsafe_allow_html=True,
+    # )
 
     # Сначала обрабатываем аудио
     audio_bytes = audio_recorder(
         text="",
         pause_threshold=2.0,
         sample_rate=41_000,
-        icon_size="2x"
+        icon_size="2x",
+        key="fixed-mic"
     )
     if audio_bytes and (audio_bytes != st.session_state.get("last_audio", b"")) \
             and not st.session_state.get("audio_processed", False):
@@ -425,3 +451,36 @@ def session_page(user: tuple, session_id: int) -> None:
     # Обработка отправки текста
     if user_message:
         send_user_message(session_id, user_message)
+
+
+# import streamlit as st
+#
+# # Добавляем кнопку микрофона в фиксированном положении
+# st.markdown(
+#     """
+#     <style>
+#     .fixed-mic {
+#         position: fixed;
+#         bottom: 20px;
+#         right: 20px;
+#         width: 60px;
+#         height: 60px;
+#         background-color: #ff5733;
+#         color: white;
+#         border-radius: 50%;
+#         display: flex;
+#         justify-content: center;
+#         align-items: center;
+#         cursor: pointer;
+#         box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+#     }
+#     </style>
+#     <div class="fixed-mic" onclick="alert('Запуск записи голоса')">🎤</div>
+#     """,
+#     unsafe_allow_html=True,
+# )
+#
+# # Обычное текстовое поле
+# user_input = st.text_input("Введите текст и нажмите Enter")
+# if user_input:
+#     st.write(f"Вы ввели: {user_input}")

@@ -26,15 +26,23 @@ def login_page():
             st.error("Invalid login or password")
 
 def main():
-    """Main application function."""
     st.set_page_config(page_title="OPEX MVP", layout="wide")
-
     init_db()
 
-    # Предположим, что проект известен заранее или захардкожен
-    project_id = 1  # Замените на нужный ID проекта
+    # Кнопка в сайдбаре для входа в админку
+    st.sidebar.write("Admin demo")
+    if st.sidebar.button("Open"):
+        # Выбираем «режим» admin
+        st.session_state['session_id'] = "admin"
+        st.rerun()
 
-    # Отображаем список сессий
+    # Проверяем: если session_id == "admin", идём в admin_page()
+    if 'session_id' in st.session_state and st.session_state['session_id'] == "admin":
+        admin_page()
+        return
+
+    # Иначе — обычная логика
+    project_id = 1
     sessions = get_sessions_for_project(project_id)
     st.sidebar.write("Sessions")
     for s in sessions:
@@ -43,11 +51,13 @@ def main():
             st.session_state['session_id'] = s_id
             st.rerun()
 
-    # Отображаем выбранную сессию
     if 'session_id' in st.session_state and st.session_state['session_id'] is not None:
-        session_page(None, st.session_state['session_id'])
+        if st.session_state['session_id'] != "admin":
+            # Показываем пользовательскую страницу для сессии
+            session_page(None, st.session_state['session_id'])
     else:
-        project_page(123, 1)
+        # По умолчанию показываем project_page
+        project_page(None, project_id)
 
 
 if __name__ == "__main__":
