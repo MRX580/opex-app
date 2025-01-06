@@ -376,32 +376,32 @@ def session_page(user: tuple, session_id: int) -> None:
     # Кнопка "Summarize"
     if st.button("Summarize"):
         summarize_session(session_id)
-    # st.markdown(
-    #     """
-    #
-    #     <style>
-    #         .st-key-fixed-mic {
-    #             background: transparent; /* Прозрачный фон */
-    #             position: fixed;
-    #             bottom: 30px;
-    #             right: 10px;
-    #             width: 60px;
-    #             color: white;
-    #             border-radius: 50%;
-    #             display: flex;
-    #             justify-content: center;
-    #             align-items: center;
-    #             cursor: pointer;
-    #             z-index: 9999;
-    #         }
-    #         html {
-    #             color: white;
-    #         {
-    #
-    #     </style>
-    #     """,
-    #     unsafe_allow_html=True,
-    # )
+    st.markdown(
+        """
+
+        <style>
+            .st-key-fixed-mic {
+                background: transparent; /* Прозрачный фон */
+                position: fixed;
+                bottom: 10px;
+                right: -50px;
+                width: 60px;
+                color: white;
+                border-radius: 50%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                cursor: pointer;
+                z-index: 9999;
+            }
+            html {
+                color: white;
+            {
+
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Сначала обрабатываем аудио
     audio_bytes = audio_recorder(
