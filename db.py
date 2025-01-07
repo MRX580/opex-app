@@ -31,6 +31,17 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS admin_prompts (
+            id INTEGER PRIMARY KEY,
+            project_summarization_prompt TEXT,
+            goals_prompt TEXT,
+            assistant_prompt TEXT,
+            file_upload_prompt TEXT,
+            session_summarization_prompt TEXT
+        )
+    ''')
+
     # Таблица сессий (10 сессий на проект)
     c.execute('''CREATE TABLE IF NOT EXISTS sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,6 +80,80 @@ def init_db():
         FOREIGN KEY(user_id) REFERENCES users(id)
     )''')
 
+    c.execute("SELECT id FROM admin_prompts WHERE id = 1")
+    row = c.fetchone()
+    if not row:
+        c.execute("""
+                INSERT INTO admin_prompts(
+                    id,
+                    project_summarization_prompt,
+                    goals_prompt,
+                    assistant_prompt,
+                    file_upload_prompt,
+                    session_summarization_prompt
+                ) VALUES (1, '', '', '', '', '')
+            """)
+    conn.commit()
+    conn.close()
+
+def get_admin_prompts() -> dict:
+    """
+    Возвращает словарь с промптами из таблицы admin_prompts (строка с id=1).
+    Если такой строки нет, вернёт None.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT
+            project_summarization_prompt,
+            goals_prompt,
+            assistant_prompt,
+            file_upload_prompt,
+            session_summarization_prompt
+        FROM admin_prompts
+        WHERE id=1
+    """)
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return {
+            "project_summarization_prompt": row[0] or "",
+            "goals_prompt": row[1] or "",
+            "assistant_prompt": row[2] or "",
+            "file_upload_prompt": row[3] or "",
+            "session_summarization_prompt": row[4] or ""
+        }
+    else:
+        return None
+
+def update_admin_prompts(
+    project_summarization_prompt: str,
+    goals_prompt: str,
+    assistant_prompt: str,
+    file_upload_prompt: str,
+    session_summarization_prompt: str
+):
+    """
+    Обновляет запись с id=1 в admin_prompts.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        UPDATE admin_prompts
+        SET
+            project_summarization_prompt=?,
+            goals_prompt=?,
+            assistant_prompt=?,
+            file_upload_prompt=?,
+            session_summarization_prompt=?
+        WHERE id=1
+    """, (
+        project_summarization_prompt,
+        goals_prompt,
+        assistant_prompt,
+        file_upload_prompt,
+        session_summarization_prompt
+    ))
     conn.commit()
     conn.close()
 
@@ -237,6 +322,17 @@ def get_user_by_token(token):
     return user
 
 
+def get_user_by_id(id):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""SELECT u.id, u.name, u.email, u.password_hash, u.role, u.organization 
+                 FROM tokens t 
+                 JOIN users u ON u.id = t.user_id
+                 WHERE u.id=?""", (id,))
+    user = c.fetchone()
+    conn.close()
+    return user
+
 def remove_token(token):
     conn = get_connection()
     c = conn.cursor()
@@ -381,3 +477,53 @@ def get_all_users():
     users = c.fetchall()
     conn.close()
     return users
+
+def create_project_with_sessions(user_id: int, project_name: str) -> None:
+    """
+    Создает новый проект с заданным названием и 22 сессии для него.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+
+    # Создаем новый проект
+    c.execute(
+        "INSERT INTO projects (user_id, name, goal, status) VALUES (?, ?, ?, ?)",
+        (user_id, project_name, "Define the goals of this project", "Not Started"),
+    )
+    project_id = c.lastrowid
+
+    # Создаем 22 сессии
+    session_templates = [
+        "Project Kickoff",
+        "1 - Preparation",
+        "1 - Post-Session Report",
+        "2 - Preparation",
+        "2 - Post-Session Report",
+        "3 - Preparation",
+        "3 - Post-Session Report",
+        "4 - Preparation",
+        "4 - Post-Session Report",
+        "5 - Preparation",
+        "5 - Post-Session Report",
+        "6 - Preparation",
+        "6 - Post-Session Report",
+        "7 - Preparation",
+        "7 - Post-Session Report",
+        "8 - Preparation",
+        "8 - Post-Session Report",
+        "9 - Preparation",
+        "9 - Post-Session Report",
+        "10 - Preparation",
+        "10 - Post-Session Report",
+        "Project Closure",
+    ]
+
+    for index, session_name in enumerate(session_templates):
+        c.execute(
+            "INSERT INTO sessions (project_id, session_number, status, summary, session_name) VALUES (?, ?, ?, ?, ?)",
+            (project_id, index + 1, "Not Started", None, session_name),
+        )
+
+    conn.commit()
+    conn.close()
+

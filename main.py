@@ -1,17 +1,19 @@
 import streamlit as st
-from db import init_db, store_user_token, get_user_by_token, get_projects_for_user, get_sessions_for_project
-from auth import authenticate
+from db import init_db, store_user_token, get_user_by_token, get_user_by_id, get_all_users
+# from auth import authenticate  # Закомментировано, так как авторизация отключена
 from admin import admin_page
 from user import user_projects_page, project_page, session_page
 import uuid
 
+
 def login_page():
     """Login page."""
+    # Отключена авторизация
     st.title("Login")
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
 
-    if st.button("continue"):
+    if st.button("Continue"):
         user = authenticate(email, password)
         if user:
             # Generate a token, store it in DB and session
@@ -20,44 +22,75 @@ def login_page():
             st.session_state['logged_in'] = True
             st.session_state['user'] = user
             st.session_state['token'] = token
-            st.query_params.token = token
+            st.query_params.token = token  # Set token in URL params
+            st.success("Login successful!")
             st.rerun()
         else:
             st.error("Invalid login or password")
+
+
+def select_user_page():
+    """Initial page with two buttons: Normal User and Admin."""
+    st.title("Choose user/admin mod")
+
+    # Получаем всех пользователей из БД
+    users = get_all_users()
+
+    if not users or len(users) < 2:
+        # st.error("Необходимо, чтобы в базе данных было как минимум два пользователя.")
+        return
+
+    # Предполагаем, что первый пользователь — обычный, второй — админ
+    normal_user = users[0]
+    admin_user = users[1]
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("User"):
+            st.session_state['logged_in'] = True
+            st.session_state['user'] = normal_user
+            # st.success(f"Выполнен вход как {normal_user[1]} (Пользователь)")
+            st.rerun()
+
+    with col2:
+        if st.button("Admin"):
+            st.session_state['logged_in'] = True
+            st.session_state['user'] = admin_user
+            # st.success(f"Выполнен вход как {admin_user[1]} (Админ)")
+            st.rerun()
+
 
 def main():
     st.set_page_config(page_title="OPEX MVP", layout="wide")
     init_db()
 
-    # Кнопка в сайдбаре для входа в админку
-    st.sidebar.write("Admin demo")
-    if st.sidebar.button("Open"):
-        # Выбираем «режим» admin
-        st.session_state['session_id'] = "admin"
-        st.rerun()
+    # Проверяем, есть ли пользовательский токен в URL
+    # token = st.query_params.get("token")
+    # if token and "logged_in" not in st.session_state:
+    #     user = get_user_by_token(token)
+    #     if user:
+    #         st.session_state['logged_in'] = True
+    #         st.session_state['user'] = user
+    #         st.session_state['token'] = token
 
-    # Проверяем: если session_id == "admin", идём в admin_page()
-    if 'session_id' in st.session_state and st.session_state['session_id'] == "admin":
-        admin_page()
+    # Если пользователь не вошёл, показываем начальную страницу с выбором типа пользователя
+    if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
+        select_user_page()
         return
 
-    # Иначе — обычная логика
-    project_id = 1
-    sessions = get_sessions_for_project(project_id)
-    st.sidebar.write("Sessions")
-    for s in sessions:
-        s_id, s_num, s_status, s_summary, s_name = s
-        if st.sidebar.button(f"Session {s_name if str(s_name) != 'None' else s_num}"):
-            st.session_state['session_id'] = s_id
-            st.rerun()
+    # --- Если пользователь является админом, переходим в админку ---
+    if st.session_state["user"][4] == "admin":
+        admin_page()  # Показываем admin_page из admin.py
+        return
 
-    if 'session_id' in st.session_state and st.session_state['session_id'] is not None:
-        if st.session_state['session_id'] != "admin":
-            # Показываем пользовательскую страницу для сессии
-            session_page(None, st.session_state['session_id'])
+    # --- Иначе (не админ) — обычный пользовательский сценарий ---
+    if "session_id" in st.session_state and st.session_state["session_id"]:
+        session_page(st.session_state["user"], st.session_state["session_id"])
+    elif "project_id" in st.session_state and st.session_state["project_id"]:
+        project_page(st.session_state["user"], st.session_state["project_id"])
     else:
-        # По умолчанию показываем project_page
-        project_page(None, project_id)
+        user_projects_page(st.session_state["user"])
 
 
 if __name__ == "__main__":
