@@ -527,3 +527,64 @@ def create_project_with_sessions(user_id: int, project_name: str) -> None:
     conn.commit()
     conn.close()
 
+
+def insert_admin_pdf(file_path: str, file_name: str):
+    """
+    Сохраняет PDF как «глобальный» (не привязанный ни к проекту, ни к сессии).
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO files (project_id, session_id, file_path, file_name)
+        VALUES (NULL, NULL, ?, ?)
+    """, (file_path, file_name))
+    conn.commit()
+    conn.close()
+
+
+def get_admin_pdf_paths():
+    """
+    Возвращает список путей (file_path) всех «глобальных» PDF-файлов.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT file_path FROM files WHERE project_id IS NULL AND session_id IS NULL")
+    rows = c.fetchall()
+    conn.close()
+    return [row[0] for row in rows]
+
+def get_admin_pdfs():
+    """
+    Возвращает список глобальных (админских) PDF-файлов.
+    Каждый элемент списка: (id, file_path, file_name).
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, file_path, file_name
+        FROM files
+        WHERE project_id IS NULL AND session_id IS NULL
+    """)
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
+def delete_file(file_id):
+    """Удаляет файл из базы данных и файловой системы."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    # Получаем путь файла
+    c.execute("SELECT file_path FROM files WHERE id=?", (file_id,))
+    result = c.fetchone()
+    if result:
+        file_path = result[0]
+        # Удаляем файл из файловой системы, если он существует
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        # Удаляем запись из базы данных
+        c.execute("DELETE FROM files WHERE id=?", (file_id,))
+        conn.commit()
+
+    conn.close()

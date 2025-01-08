@@ -10,8 +10,14 @@ from db import (
     get_user_by_id,
     get_admin_prompts,
     update_admin_prompts,
-    get_project_summary
+    get_project_summary,
+    insert_admin_pdf,
+    get_admin_pdfs,
+    delete_file  # <-- добавили импорт
 )
+from utils import save_uploaded_file
+
+
 def render_project_summary(project: tuple, project_id: int) -> None:
     st.markdown(f"<p style='margin: 5px 0px;'>Project {project[2]}</p>", unsafe_allow_html=True)
     aggregated_text = get_project_summary(project_id)
@@ -30,15 +36,14 @@ def render_project_summary(project: tuple, project_id: int) -> None:
             '</p>',
             unsafe_allow_html=True
         )
+
 def render_project_progress() -> None:
-    # Пример статического прогресса (если нужно)
     sessions = [
         {"id": 1, "status": "completed"},
         {"id": 2, "status": "completed"},
         {"id": 3, "status": "completed"},
         {"id": 4, "status": "not completed"},
         {"id": 5, "status": "not completed"},
-        # и т.д...
     ]
     progress_html = "<div style='display: flex; gap: 5px; margin-bottom: 10px;'>"
     for session in sessions:
@@ -49,16 +54,10 @@ def render_project_progress() -> None:
         )
     progress_html += "</div>"
     st.markdown(progress_html, unsafe_allow_html=True)
+
 def admin_page():
-    """
-    Многошаговая админ-панель (read-only):
-      1) Список пользователей + поля для редактирования промптов
-      2) Список проектов для выбранного пользователя -> клик "Open project"
-      3) Показываем проект (название, описание, статус, goals, next action - всё read-only), список сессий
-      4) Просмотр конкретной сессии (название, статус, summary, файлы, чат) - read-only
-    """
     st.title("Admin Panel")
-    # Храним состояние «куда мы провалились»
+
     if 'selected_user' not in st.session_state:
         st.session_state['selected_user'] = None
     if 'selected_project' not in st.session_state:
@@ -67,10 +66,9 @@ def admin_page():
         st.session_state['selected_session'] = None
 
     # ---------------------------
-    # Шаг 1: Если не выбран пользователь -> показываем список пользователей + блок редактирования промптов
+    # Шаг 1: Список пользователей + блок редактирования промптов
     if st.session_state['selected_user'] is None:
         if st.button("Exit"):
-            # «Разлогиниваем» пользователя и перезагружаем
             st.session_state['logged_in'] = False
             st.session_state.pop('user', None)
             st.session_state.pop('token', None)
@@ -90,29 +88,52 @@ def admin_page():
                     st.rerun()
 
         st.write("---")
-        # Перенесенный блок редактирования промптов (был в шаге 2)
         st.markdown("### Customize Prompts")
-        prompts = get_admin_prompts()  # Словарь с 5 полями
+        prompts = get_admin_prompts()
 
         assistant_prompt_val = st.text_area(
             "Assistant",
             value=prompts["assistant_prompt"],
-            placeholder="Enter text for the 'assistant' role or any context you want to provide to the AI..."
+            placeholder="Enter text for the 'assistant' role or any context..."
         )
         file_upload_prompt_val = st.text_area(
             "File Upload",
             value=prompts["file_upload_prompt"],
-            placeholder="Enter text for how you'd like ChatGPT to handle file uploads or PDF context..."
+            placeholder="Enter text for how you'd like ChatGPT to handle file uploads..."
         )
+
+        # -- Загрузка новых PDF --
+        pdf_files = st.file_uploader(
+            "Upload PDF files",
+            type=["pdf"],
+            accept_multiple_files=True
+        )
+
+        # -- Отображаем уже загруженные глобальные PDF --
+        pdf_rows = get_admin_pdfs()  # [(id, file_path, file_name), ...]
+        if pdf_rows:
+            for pdf_id, pdf_path, pdf_name in pdf_rows:
+                cols = st.columns([3,1])  # Ширина колонок: 3/1
+                with cols[0]:
+                    st.write(f"- **{pdf_name}** — `{pdf_path}`")
+                with cols[1]:
+                    # Кнопка «Delete»
+                    if st.button("Delete", key=f"delete_{pdf_id}"):
+                        delete_file(pdf_id)
+                        st.success(f"File {pdf_name} was deleted.")
+                        st.rerun()  # перезагрузим страницу
+        else:
+            st.write("*No global PDFs yet.*")
+
         project_summarization_prompt_val = st.text_area(
             "Project Summarization",
             value=prompts["project_summarization_prompt"],
-            placeholder="Enter text for how you'd like to prompt ChatGPT for project summarization..."
+            placeholder="Enter text for project summarization..."
         )
         goals_prompt_val = st.text_area(
             "Goals",
             value=prompts["goals_prompt"],
-            placeholder="Enter text for how you'd like to prompt ChatGPT for goals generation..."
+            placeholder="Enter text for goals generation..."
         )
         session_summarization_prompt_val = st.text_area(
             "Session Summarization",
@@ -121,6 +142,7 @@ def admin_page():
         )
 
         if st.button("Save Prompts"):
+            # 1) Сохраняем промпты
             update_admin_prompts(
                 project_summarization_prompt_val,
                 goals_prompt_val,
@@ -128,14 +150,22 @@ def admin_page():
                 file_upload_prompt_val,
                 session_summarization_prompt_val
             )
-            st.success("Prompts successfully updated!")
 
-        return  # Останавливаемся, пока не выбрали пользователя
+            # 2) Сохраняем загруженные PDF (если есть)
+            if pdf_files:
+                for file in pdf_files:
+                    file_path = save_uploaded_file(file, "uploads")
+                    insert_admin_pdf(file_path, file.name)
+
+                st.success("Prompts saved and PDFs uploaded successfully!")
+            else:
+                st.success("Prompts updated successfully (no PDFs uploaded).")
+
+        return  # Заканчиваем, пока не выбрали пользователя
 
     # ---------------------------
-    # Шаг 2: Пользователь выбран, но проект не выбран -> показываем проекты (без промптов, т.к. перенесли их в шаг 1)
+    # Шаг 2: Пользователь выбран, но проект не выбран
     if st.session_state['selected_user'] is not None and st.session_state['selected_project'] is None:
-        # Кнопка "Back to user list"
         if st.button("Back to user list"):
             st.session_state['selected_user'] = None
             st.session_state['selected_project'] = None
@@ -145,7 +175,9 @@ def admin_page():
         st.markdown(
             f"""
             <h3>
-                User: <span style='font-weight:400;'>{get_user_by_id(st.session_state['selected_user'])[1]}</span>
+                User: <span style='font-weight:400;'>
+                    {get_user_by_id(st.session_state['selected_user'])[1]}
+                </span>
             </h3>
             """,
             unsafe_allow_html=True
@@ -187,7 +219,7 @@ def admin_page():
                 st.markdown(f'<p style="color:gray; font-size:16px;">{proj_goal}</p>', unsafe_allow_html=True)
             else:
                 st.markdown(
-                    f'<p style="color:gray; font-size:16px;">Goals not set</p>',
+                    '<p style="color:gray; font-size:16px;">Goals not set</p>',
                     unsafe_allow_html=True
                 )
 
@@ -195,15 +227,14 @@ def admin_page():
             st.markdown(
                 """
                 <p style="color:gray; font-size:16px;">
-                [GPT will automatically conclude the next action from the project's content. 
-                User will have access to editing the Next Action field]
+                [GPT will automatically propose the next action from the project's content. 
+                User will have access to editing the Next Action field if needed]
                 </p>
                 """,
                 unsafe_allow_html=True
             )
 
         st.write("---")
-
         st.subheader("Sessions")
         sessions = get_sessions_for_project(st.session_state['selected_project'])
         if not sessions:

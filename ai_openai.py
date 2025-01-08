@@ -5,7 +5,7 @@ import os
 from utils import extract_text_from_pdf
 from dotenv import find_dotenv, load_dotenv
 from io import BytesIO
-from db import get_admin_prompts  # Импортируем функцию для получения промптов
+from db import get_admin_prompts, get_admin_pdf_paths  # Импортируем функцию для получения промптов
 
 load_dotenv(find_dotenv())
 
@@ -17,9 +17,9 @@ def ask_chatgpt(messages, pdf_paths=None, max_tokens=1500, temperature=0.7):
     Общается с ChatGPT, включая контекст из загруженных PDF.
 
     :param messages: список сообщений.
-    :param pdf_paths: список путей к загруженным PDF-файлам.
-    :param max_tokens: максимальное количество токенов.
-    :param temperature: температура генерации текста.
+    :param pdf_paths: список путей к загруженным PDF-файлам (если есть).
+    :param max_tokens: макс. кол-во токенов.
+    :param temperature: "температура" генерации.
     :return: ответ модели.
     """
     # Получаем промпты из БД
@@ -27,36 +27,47 @@ def ask_chatgpt(messages, pdf_paths=None, max_tokens=1500, temperature=0.7):
     assistant_prompt = prompts.get("assistant_prompt", "").strip()
     file_upload_prompt = prompts.get("file_upload_prompt", "").strip()
 
-    # Добавляем содержимое PDF в контекст
-    if pdf_paths:
-        pdf_content = ""
-        for pdf_path in pdf_paths:
-            pdf_content += extract_text_from_pdf(pdf_path) + "\n---\n"
+    # Берём глобальные PDF от админа
+    admin_pdf_paths = get_admin_pdf_paths()  # список путей
 
-        # Добавляем текст про Charlie как системное сообщение, если есть
+    # Если вызов пришёл с дополнительными pdf_paths, комбинируем их
+    if pdf_paths is None:
+        pdf_paths = []
+    all_pdf_paths = pdf_paths + admin_pdf_paths
+
+    # 1) Добавляем содержимое PDF в контекст
+    if all_pdf_paths:
+        pdf_content = ""
+        for p in all_pdf_paths:
+            pdf_content += extract_text_from_pdf(p) + "\n---\n"
+
         if pdf_content.strip():
-            # Используем 'file_upload_prompt' из БД вместо жестко прописанного
+            # Если есть file_upload_prompt, используем его, иначе fallback
             if file_upload_prompt:
-                system_prompt = f"Here are the contents of the downloaded PDFs to consider when responding:\n\n{pdf_content}"
+                system_prompt = (
+                    f"{file_upload_prompt}\n\n"
+                    f"Here are the contents of the uploaded PDFs:\n{pdf_content}"
+                )
             else:
-                # Fallback, если промпт не задан
-                system_prompt = f"Here are the contents of the downloaded PDFs to consider when responding:\n\n{pdf_content}"
+                system_prompt = (
+                    f"Here are the contents of the uploaded PDFs:\n{pdf_content}"
+                )
 
             messages.insert(0, {
                 "role": "system",
                 "content": system_prompt
             })
 
-    # Добавляем 'assistant_prompt' как системное сообщение, если задан
+    # 2) Добавляем 'assistant_prompt' как системное сообщение, если он задан
     if assistant_prompt:
         messages.insert(0, {
             "role": "system",
             "content": assistant_prompt
         })
 
-    # Отправляем запрос в ChatGPT
+    # 3) Запрашиваем ChatGPT
     response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",  # Убедитесь, что используете корректную модель
+        model="gpt-4o-mini",  # или другая ваша модель
         messages=messages,
         max_tokens=max_tokens,
         temperature=temperature
