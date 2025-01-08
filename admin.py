@@ -94,8 +94,18 @@ def admin_page():
         st.markdown("### Customize Prompts")
         prompts = get_admin_prompts()  # Словарь с 5 полями
 
+        assistant_prompt_val = st.text_area(
+            "Assistant",
+            value=prompts["assistant_prompt"],
+            placeholder="Enter text for the 'assistant' role or any context you want to provide to the AI..."
+        )
+        file_upload_prompt_val = st.text_area(
+            "File Upload",
+            value=prompts["file_upload_prompt"],
+            placeholder="Enter text for how you'd like ChatGPT to handle file uploads or PDF context..."
+        )
         project_summarization_prompt_val = st.text_area(
-            "Project Summarization Prompt",
+            "Project Summarization",
             value=prompts["project_summarization_prompt"],
             placeholder="Enter text for how you'd like to prompt ChatGPT for project summarization..."
         )
@@ -104,18 +114,8 @@ def admin_page():
             value=prompts["goals_prompt"],
             placeholder="Enter text for how you'd like to prompt ChatGPT for goals generation..."
         )
-        assistant_prompt_val = st.text_area(
-            "Assistant Prompt",
-            value=prompts["assistant_prompt"],
-            placeholder="Enter text for the 'assistant' role or any context you want to provide to the AI..."
-        )
-        file_upload_prompt_val = st.text_area(
-            "File Upload Prompt",
-            value=prompts["file_upload_prompt"],
-            placeholder="Enter text for how you'd like ChatGPT to handle file uploads or PDF context..."
-        )
         session_summarization_prompt_val = st.text_area(
-            "Session Summarization Prompt",
+            "Session Summarization",
             value=prompts["session_summarization_prompt"],
             placeholder="Enter text for how you'd like to summarize sessions..."
         )
@@ -142,9 +142,16 @@ def admin_page():
             st.session_state['selected_session'] = None
             st.rerun()
 
-        st.subheader(
-            f"User {get_user_by_id(st.session_state['selected_user'])[1]}: Projects"
+        st.markdown(
+            f"""
+            <h3>
+                User: <span style='font-weight:400;'>{get_user_by_id(st.session_state['selected_user'])[1]}</span>
+            </h3>
+            """,
+            unsafe_allow_html=True
         )
+
+        st.subheader("Projects")
         projects = get_projects_for_user(st.session_state['selected_user'])
         if not projects:
             st.warning("No projects found for this user.")

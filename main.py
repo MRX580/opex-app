@@ -31,7 +31,7 @@ def login_page():
 
 def select_user_page():
     """Initial page with two buttons: Normal User and Admin."""
-    st.title("Choose user/admin mod")
+    st.title("Choose user/admin mode")
 
     # Получаем всех пользователей из БД
     users = get_all_users()

@@ -38,7 +38,7 @@ def validate_audio_length(audio_bytes: bytes, min_length_seconds: float = 0.1) -
 
 
 def render_project_card(project_id: int, name: str) -> None:
-    if st.button(f"Open {name}", key=f"open_project_{project_id}"):
+    if st.button(f"{name}", key=f"open_project_{project_id}"):
         st.session_state["project_id"] = project_id
         st.session_state["session_id"] = None
         st.rerun()
@@ -85,7 +85,7 @@ def user_projects_page(user: tuple) -> None:
 
 
 def render_project_summary(project: tuple, project_id: int) -> None:
-    st.markdown(f"<p style='margin: 5px 0px;'>Project {project[2]}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='margin: 5px 0px;'>{project[2]}</p>", unsafe_allow_html=True)
     aggregated_text = get_project_summary(project_id)
     if aggregated_text and aggregated_text != "None":
         st.markdown(f"<p style='margin: 5px 0px;'>Line 3</p>", unsafe_allow_html=True)
@@ -243,7 +243,7 @@ def project_page(user: tuple, project_id: int) -> None:
     Страница конкретного проекта.
     """
     # --- Сайдбар ---
-    st.sidebar.title("Project Sessions")
+    st.sidebar.title("Sessions")
     sessions = get_sessions_for_project(project_id)
     for s in sessions:
         s_id, s_number, s_status, s_summary, s_name = s
