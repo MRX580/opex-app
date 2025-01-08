@@ -110,7 +110,7 @@ def admin_page():
             placeholder="Enter text for how you'd like to prompt ChatGPT for project summarization..."
         )
         goals_prompt_val = st.text_area(
-            "Goals Prompt",
+            "Goals",
             value=prompts["goals_prompt"],
             placeholder="Enter text for how you'd like to prompt ChatGPT for goals generation..."
         )
