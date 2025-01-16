@@ -13,7 +13,7 @@ from db import (
     get_project_summary,
     insert_admin_pdf,
     get_admin_pdfs,
-    delete_file  # <-- добавили импорт
+    delete_file
 )
 from utils import save_uploaded_file
 
@@ -88,7 +88,7 @@ def admin_page():
                     st.rerun()
 
         st.write("---")
-        st.markdown("### Customize Prompts")
+        st.markdown("### Customize Instructions")
         prompts = get_admin_prompts()
 
         assistant_prompt_val = st.text_area(
@@ -157,9 +157,9 @@ def admin_page():
                     file_path = save_uploaded_file(file, "uploads")
                     insert_admin_pdf(file_path, file.name)
 
-                st.success("Prompts saved and PDFs uploaded successfully!")
+                st.success("Instructions saved and PDFs uploaded successfully!")
             else:
-                st.success("Prompts updated successfully (no PDFs uploaded).")
+                st.success("Instructions updated successfully (no PDFs uploaded).")
 
         return  # Заканчиваем, пока не выбрали пользователя
 
