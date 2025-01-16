@@ -79,3 +79,4 @@ tzdata==2024.2
 urllib3==2.3.0
 yarl==1.18.3
 pyttsx3==2.98
+gtts==2.5.4
