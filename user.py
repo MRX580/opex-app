@@ -484,7 +484,7 @@ def session_page(user: tuple, session_id: int) -> None:
                 background: transparent;
                 position: fixed;
                 bottom: 15px;
-                right: -50px;
+                right: 80px;
                 width: 60px;
                 color: white;
                 border-radius: 50%;
