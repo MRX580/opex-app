@@ -27,6 +27,7 @@ from audio_recorder_streamlit import audio_recorder
 from pydub import AudioSegment
 from io import BytesIO
 
+
 def validate_audio_length(audio_bytes: bytes, min_length_seconds: float = 0.1) -> bool:
     try:
         audio = AudioSegment.from_file(BytesIO(audio_bytes), format="wav")
@@ -45,9 +46,6 @@ def render_project_card(project_id: int, name: str) -> None:
 
 
 def user_projects_page(user: tuple) -> None:
-    """
-    Страница со списком проектов.
-    """
     user_id = user[0]
     user_name = user[1]
 
@@ -105,14 +103,12 @@ def render_project_summary(project: tuple, project_id: int) -> None:
 
 
 def render_project_progress() -> None:
-    # Пример статического прогресса (если нужно)
     sessions = [
         {"id": 1, "status": "completed"},
         {"id": 2, "status": "completed"},
         {"id": 3, "status": "completed"},
         {"id": 4, "status": "not completed"},
         {"id": 5, "status": "not completed"},
-        # и т.д...
     ]
     progress_html = "<div style='display: flex; gap: 5px; margin-bottom: 10px;'>"
     for session in sessions:
@@ -168,26 +164,18 @@ def render_uploaded_files(project_id: int) -> None:
 
 
 def compress_and_store_project_summary(project_id: int):
-    """
-    Вызывается при завершении сессии -> собираем все summary и делаем общую "aggregated_summary".
-    Теперь используем prompt из БД (project_summarization_prompt).
-    """
-    # Получаем все summary сессий
     session_summaries = get_session_summaries_for_project(project_id)
     if not session_summaries:
         update_project_summary(project_id, "Insufficient data for project summarization.")
         return
 
-    # Формируем единый текст из summary сессий
     text_for_chatgpt = ""
     for i, summary in enumerate(session_summaries, start=1):
         text_for_chatgpt += f"Session {i}:\n{summary}\n\n"
 
-    # 1. Достаём промпты из БД
     prompts = get_admin_prompts()
     project_sum_prompt = prompts.get("project_summarization_prompt", "").strip()
 
-    # 2. Если в БД пусто — используем fallback
     if not project_sum_prompt:
         project_sum_prompt = (
             "Please merge these texts into one short final summary, "
@@ -195,7 +183,6 @@ def compress_and_store_project_summary(project_id: int):
             "Provide the answer in the same language as the summaries."
         )
 
-    # 3. Генерируем prompt_text
     prompt_text = (
         "Below are the summaries of the sessions for one project:\n\n"
         f"{text_for_chatgpt}\n"
@@ -208,11 +195,6 @@ def compress_and_store_project_summary(project_id: int):
 
 
 def generate_goals_from_first_session(project_id: int) -> None:
-    """
-    Функция вызывается при завершении первой сессии (session_number=1),
-    чтобы автоматически сформировать goals для проекта.
-    Теперь используем prompt из БД (goals_prompt).
-    """
     first_summary = get_first_session_summary(project_id)
     if not first_summary:
         return
@@ -220,7 +202,6 @@ def generate_goals_from_first_session(project_id: int) -> None:
     prompts = get_admin_prompts()
     goals_prompt = prompts.get("goals_prompt", "").strip()
 
-    # Если пусто, используем fallback
     if not goals_prompt:
         goals_prompt = (
             "Based on this information, formulate a concise list of the project's main goals. "
@@ -239,10 +220,6 @@ def generate_goals_from_first_session(project_id: int) -> None:
 
 
 def project_page(user: tuple, project_id: int) -> None:
-    """
-    Страница конкретного проекта.
-    """
-    # --- Сайдбар ---
     st.sidebar.title("Sessions")
     sessions = get_sessions_for_project(project_id)
     for s in sessions:
@@ -256,7 +233,6 @@ def project_page(user: tuple, project_id: int) -> None:
         st.session_state["session_id"] = None
         st.rerun()
 
-    # --- Основная часть ---
     project = get_project_by_id(project_id)
     if not project:
         st.error("Project not found")
@@ -279,29 +255,20 @@ def project_page(user: tuple, project_id: int) -> None:
     )
 
 
-def send_user_message(session_id: int, user_message: str) -> None:
-    """
-    Отправляет сообщение от пользователя и получает ответ от ChatGPT.
-    Добавляем assistant_prompt из БД как system (если оно не пустое).
-    """
+def send_user_message(session_id: int, user_message: str, muted: bool = True) -> None:
     if not user_message.strip():
         st.error("Please enter a message.")
         return
 
-    # Собираем текущий чат
     all_msgs = get_messages_for_session(session_id)
     messages_format = [
         {"role": ("user" if m[0] == "user" else "assistant"), "content": m[1]}
         for m in all_msgs
     ]
-    # Добавляем новое сообщение
     messages_format.append({"role": "user", "content": user_message})
 
-    # 1. Достаём assistant_prompt из БД
     prompts = get_admin_prompts()
     assistant_prompt = prompts.get("assistant_prompt", "").strip()
-
-    # 2. Если он не пустой, вставляем в начало
     if assistant_prompt:
         messages_format.insert(0, {"role": "system", "content": assistant_prompt})
 
@@ -314,27 +281,27 @@ def send_user_message(session_id: int, user_message: str) -> None:
     insert_message(session_id, "user", user_message)
     insert_message(session_id, "assistant", assistant_reply)
 
+    # Когда пришёл новый ответ, сбрасываем флаг воспроизведения.
+    st.session_state["voice_assistant_reply"] = assistant_reply
+    st.session_state["voice_assistant_reply_played"] = False  # <-- Чтобы вновь воспроизвести
+    st.session_state["voice_assistant_reply_session_id"] = session_id
+
+    # Сбросим некоторые другие флаги
     st.session_state["audio_processed"] = False
     st.session_state["last_audio"] = b""
     st.session_state["transcribed_text"] = ""
     st.session_state["sended_message"] = True
-    st.session_state["voice_assistant_reply"] = assistant_reply
-    st.session_state["voice_reply_played"] = False  # Снова разрешаем проиграть ответ
+    st.session_state["muted"] = muted
+
     st.rerun()
 
 
 def summarize_session(session_id: int) -> None:
-    """
-    Суммаризация конкретной сессии. Вместо жёсткого текста - используем session_summarization_prompt из БД.
-    """
     all_msgs = get_messages_for_session(session_id)
     chat_text = "\n".join([f"{msg[0]}: {msg[1]}" for msg in all_msgs])
 
-    # 1. Достаём session_summarization_prompt
     prompts = get_admin_prompts()
     session_sum_prompt = prompts.get("session_summarization_prompt", "").strip()
-
-    # 2. Если пусто, fallback:
     if not session_sum_prompt:
         session_sum_prompt = (
             "Summarize the conversation as briefly as possible, using only a few short sentences that convey the essence. "
@@ -342,7 +309,6 @@ def summarize_session(session_id: int) -> None:
             "Provide a resume in the language used for communication (ignore other requirements)."
         )
 
-    # 3. Формируем финальный текст
     summary_prompt = session_sum_prompt + "\n\nHere is the conversation:\n" + chat_text
 
     session = get_session_by_id(session_id)
@@ -353,26 +319,29 @@ def summarize_session(session_id: int) -> None:
     update_session_summary(session_id, summary)
     st.success("The summary has been updated!")
 
-    # Делаем общий summary проекта
-    session = get_session_by_id(session_id)
+    # Затем делаем общий summary проекта
     project_id = session[1]
     compress_and_store_project_summary(project_id)
     st.rerun()
 
 
 def session_page(user: tuple, session_id: int) -> None:
-    # ИНИЦИАЛИЗАЦИЯ ВСЕХ СОСТОЯНИЙ
     st.session_state.setdefault("audio_processed", False)
     st.session_state.setdefault("last_audio", b"")
     st.session_state.setdefault("transcribed_text", "")
     st.session_state.setdefault("sended_message", False)
 
-    # Второй микрофон — голосовой "полный" цикл (вопрос + TTS):
-    st.session_state.setdefault("voice_transcribed_text", "")  # текст, расшифрованный с voice-майка
-    st.session_state.setdefault("voice_assistant_reply", "")  # ответ ассистента (голосом)
-    st.session_state.setdefault("voice_reply_played", True)  # чтобы не воспроизводить повторно
-    st.session_state.setdefault("audio_voice_processed", False)  # для контроля одного и того же файла
-    st.session_state.setdefault("last_assistant_reply", "")  # для контроля одного и того же файла
+    # Для второго микрофона и TTS
+    st.session_state.setdefault("voice_transcribed_text", "")
+    st.session_state.setdefault("voice_assistant_reply", "")
+    st.session_state.setdefault("voice_assistant_reply_played", True)
+    st.session_state.setdefault("voice_assistant_reply_session_id", None)
+
+    st.session_state.setdefault("audio_voice_processed", False)
+    st.session_state.setdefault("last_audio_voice", b"")
+    st.session_state.setdefault("last_assistant_reply", "")
+    st.session_state.setdefault("last_assistant_reply", False)
+
     session_data = get_session_by_id(session_id)
     if not session_data:
         st.error("Session not found.")
@@ -380,7 +349,6 @@ def session_page(user: tuple, session_id: int) -> None:
 
     project_id = session_data[1]
 
-    # --- Сайдбар со всеми сессиями ---
     st.sidebar.title("Project Sessions")
     sessions = get_sessions_for_project(project_id)
     for s in sessions:
@@ -389,7 +357,6 @@ def session_page(user: tuple, session_id: int) -> None:
             st.session_state["session_id"] = s_id
             st.rerun()
 
-    # Кнопка «Back to project page»
     if st.button("Back to project page"):
         st.session_state["session_id"] = None
         st.session_state["project_id"] = project_id
@@ -397,7 +364,6 @@ def session_page(user: tuple, session_id: int) -> None:
 
     st.title(f"Session {session_data[5]}")
 
-    # --- ЛОГИКА СТАТУСОВ, САММАРИ И Т.Д. ---
     status_in_db = session_data[3]
     status_options = [
         "Not Started",
@@ -421,11 +387,8 @@ def session_page(user: tuple, session_id: int) -> None:
 
     if session_status == "Session ended" and status_in_db != "Session ended":
         update_session_status(session_id, "Session ended")
-
-        # Если это первая сессия, генерируем цели
         if session_data[2] == 1:
             generate_goals_from_first_session(project_id)
-
         summarize_session(session_id)
     else:
         if status_in_db != "Session ended":
@@ -436,7 +399,6 @@ def session_page(user: tuple, session_id: int) -> None:
     else:
         st.write("Summary: Summary Summarization by session has not yet been created.")
 
-    # --- ИСТОРИЯ СООБЩЕНИЙ ---
     msgs = get_messages_for_session(session_id)
     for sender, content, _ in msgs:
         if sender == "user":
@@ -455,7 +417,6 @@ def session_page(user: tuple, session_id: int) -> None:
 
     st.markdown("---")
 
-    # --- Работа с PDF для сессии ---
     upload_pdf_file_for_session(session_id)
     render_uploaded_files_for_session(session_id)
 
@@ -526,6 +487,7 @@ def session_page(user: tuple, session_id: int) -> None:
         unsafe_allow_html=True,
     )
 
+    # --- Первый микрофон ---
     audio_bytes = audio_recorder(
         text="",
         pause_threshold=2.0,
@@ -541,15 +503,12 @@ def session_page(user: tuple, session_id: int) -> None:
             if transcribed_text.strip():
                 st.session_state["transcribed_text"] = transcribed_text
                 st.session_state["last_audio"] = audio_bytes
-                # Вы можете сразу отправлять в чат, если хотите:
-                # send_user_message(session_id, transcribed_text)
-
-                # или просто поместить текст в поле чата:
                 st.session_state["audio_processed"] = False
                 st.rerun()
             else:
                 st.error("Transcribed message is empty. Please try again.")
 
+    # --- Второй микрофон (полный голосовой цикл) ---
     audio_voice_bytes = audio_recorder(
         text="",
         pause_threshold=2.0,
@@ -558,29 +517,38 @@ def session_page(user: tuple, session_id: int) -> None:
         neutral_color="#8fce00",
         key="fixed-voice-mic"
     )
+    if audio_voice_bytes:
+        # Проверка: не обрабатывали ли мы уже этот байтовый файл
+        if (audio_voice_bytes != st.session_state.get("last_audio_voice", b"")) \
+                or not st.session_state.get("audio_voice_processed", False):
+            if validate_audio_length(audio_voice_bytes):
+                transcribed_text = transcribe_audio(audio_voice_bytes)
+                if transcribed_text.strip():
+                    st.session_state["last_audio_voice"] = audio_voice_bytes
+                    st.session_state["audio_voice_processed"] = True
+                    send_user_message(session_id, transcribed_text, muted=False)
+                else:
+                    st.error("Transcribed message is empty. Please try again.")
+        else:
+            pass
 
-    # Проверяем, что:
-    # 1) что-то записалось (audio_voice_bytes не пустой),
-    # 2) полученный файл не совпадает с последним сохранённым (чтобы избежать повторений)
-    if audio_voice_bytes and (audio_voice_bytes != st.session_state.get("last_audio_voice", b"")):
-        if validate_audio_length(audio_voice_bytes):
-            transcribed_text = transcribe_audio(audio_voice_bytes)
-            if transcribed_text.strip():
-                # Сохраняем в стейте новую "последнюю" запись, чтобы повторно её не обрабатывать
-                st.session_state["last_audio_voice"] = audio_voice_bytes
-
-                # Отправляем сообщение в чат
-                send_user_message(session_id, transcribed_text)
-            else:
-                st.error("Transcribed message is empty. Please try again.")
-
+    # --- Воспроизведение голоса (TTS) ---
     try:
-        print(st.session_state.get("voice_assistant_reply", "").strip())
-        audio_path = text_to_speech(st.session_state["voice_assistant_reply"])
-        autoplay_audio(audio_path)
+        # Проверяем: 1) текст ответа не пуст, 2) ещё не воспроизводили, 3) совпадает session_id
+        if (
+            st.session_state.get("voice_assistant_reply", "").strip()
+            and not st.session_state.get("voice_assistant_reply_played", False)
+            and st.session_state.get("voice_assistant_reply_session_id") == session_id
+        ):
+            audio_path = text_to_speech(st.session_state["voice_assistant_reply"])
+            autoplay_audio(audio_path, muted=st.session_state["muted"])
+            # Ставим флаг, что мы уже проиграли
+            st.session_state["voice_assistant_reply_played"] = True
+
     except Exception as e:
         print(e)
 
+    # --- Если что-то надиктовали в первый микрофон, вставим в поле чата ---
     if st.session_state["transcribed_text"] and not st.session_state["sended_message"]:
         js_snippet = f"""
         <script>
@@ -603,8 +571,7 @@ def session_page(user: tuple, session_id: int) -> None:
     else:
         st.session_state["sended_message"] = False
 
+    # --- Поле для ручного ввода ---
     user_message = st.chat_input("Your question...", key="input_area")
     if user_message:
         send_user_message(session_id, user_message)
-
-

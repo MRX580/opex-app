@@ -81,14 +81,23 @@ def text_to_speech(input_text: str) -> str:
     return file_path
 
 
-def autoplay_audio(file_path: str):
+def autoplay_audio(file_path: str, muted: bool = False):
+    """
+    Проигрывает audio/mp3 в режиме autoplay.
+    Если muted=True, то аудио будет запущено без звука.
+    """
     try:
         with open(file_path, "rb") as f:
             data = f.read()
         b64 = base64.b64encode(data).decode("utf-8")
+
+        # Если muted=True — добавляем атрибут "muted"
+        muted_attr = "muted" if muted else ""
+        print(muted_attr)
+        print(True)
         md = f"""
-        <audio autoplay>
-        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        <audio autoplay {muted_attr}>
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
         </audio>
         """
         st.markdown(md, unsafe_allow_html=True)
